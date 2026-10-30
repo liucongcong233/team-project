@@ -1,5 +1,7 @@
 # Vault — a command-line password manager
 
+**Team Members:** Liu Congwen, Zhou Yi, Wu Siyuan
+
 A small, dependency-light password manager written in Python. It stores your
 passwords in a single encrypted file that can only be opened with a master
 password that lives in your head — never on disk.
