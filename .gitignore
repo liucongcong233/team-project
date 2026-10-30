@@ -1,0 +1,7 @@
+# Never commit the vault or private keys.
+vault.json
+*.priv.pem
+*.share
+
+__pycache__/
+*.pyc

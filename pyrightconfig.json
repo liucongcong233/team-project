@@ -1,0 +1,19 @@
+{
+  "venvPath": "C:/Users/lcw",
+  "venv": "miniconda3",
+  "typeCheckingMode": "basic",
+  "reportMissingTypeArgument": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportAny": "none",
+  "reportUnusedVariable": "none",
+  "reportUnusedCallResult": "none",
+  "reportImplicitStringConcatenation": "none",
+  "reportPossiblyUnboundVariable": "none",
+  "reportOptionalSubscript": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportMissingParameterType": "none",
+  "reportReturnType": "none"
+}
