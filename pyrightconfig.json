@@ -1,6 +1,4 @@
 {
-  "venvPath": "C:/Users/lcw",
-  "venv": "miniconda3",
   "typeCheckingMode": "basic",
   "reportMissingTypeArgument": "none",
   "reportUnknownVariableType": "none",
