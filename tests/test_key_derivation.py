@@ -19,6 +19,16 @@ class TestKeyDerivation(unittest.TestCase):
             }
         }
 
+    def test_different_password_produce_different_keys(self):
+        first_key = derive_key(self.vault, self.password)
+
+        second_key = derive_key(
+            self.vault,
+            "Another-Testing_Password!",
+        )
+
+        self.assertNotEqual(first_key, second_key)
+
     def test_different_salts_produce_different_keys(self):
         first_key = derive_key(self.vault, self.password)
 
