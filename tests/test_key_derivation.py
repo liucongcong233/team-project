@@ -2,6 +2,8 @@ import base64
 import unittest
 
 from vault import derive_key
+from contextlib import redirect_stderr
+from io import StringIO
 
 
 class TestKeyDerivation(unittest.TestCase):
@@ -43,7 +45,7 @@ class TestKeyDerivation(unittest.TestCase):
             self.password,
         )
 
-        self.assertNotEquals(first_key, second_key)
+        self.assertNotEqual(first_key, second_key)
 
     def test_key_is_32_bytes(self):
         key = derive_key(self.vault, self.password)
@@ -51,9 +53,21 @@ class TestKeyDerivation(unittest.TestCase):
         self.assertIsInstance(key, bytes)
         self.assertEqual(len(key), 32)
 
-
     def test_same_inputs_produce_same_key(self):
         first_key = derive_key(self.vault, self.password)
         second_key = derive_key(self.vault, self.password)
 
         self.assertEqual(first_key, second_key)
+
+    def test_missing_kdf_is_rejected(self):
+        error_output = StringIO()
+
+        with redirect_stderr(error_output):
+            with self.assertRaises(SystemExit) as result:
+                derive_key({}, self.password)
+
+        self.assertEqual(result.exception.code, 1)
+        self.assertIn(
+            "Vault is missing KDF parameters.",
+            error_output.getvalue(),
+        )

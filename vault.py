@@ -120,6 +120,9 @@ def derive_key(vault: dict, password: str) -> bytes:
     The salt is stored in the vault header (a salt is not a secret). The key
     itself is never written to disk.
     """
+    if "kdf" not in vault:
+        die("Vault is missing KDF parameters.")
+
     kdf = vault["kdf"]
     salt = base64.b64decode(kdf["salt_b64"])
     return hash_secret_raw(
