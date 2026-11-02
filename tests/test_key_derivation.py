@@ -71,3 +71,16 @@ class TestKeyDerivation(unittest.TestCase):
             "Vault is missing KDF parameters.",
             error_output.getvalue(),
         )
+
+    def test_null_kdf_is_rejected(self):
+        error_output = StringIO()
+
+        with redirect_stderr(error_output):
+            with self.assertRaises(SystemExit) as result:
+                derive_key({"kdf": None}, self.password)
+
+        self.assertEqual(result.exception.code, 1)
+        self.assertIn(
+            "Vault KDF parameters must be an object.",
+            error_output.getvalue(),
+        )

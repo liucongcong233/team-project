@@ -124,6 +124,9 @@ def derive_key(vault: dict, password: str) -> bytes:
         die("Vault is missing KDF parameters.")
 
     kdf = vault["kdf"]
+    if not isinstance(kdf,dict):
+        die("Vault KDF parameters must be an object.")
+
     salt = base64.b64decode(kdf["salt_b64"])
     return hash_secret_raw(
         secret=password.encode("utf-8"),
