@@ -84,3 +84,31 @@ class TestKeyDerivation(unittest.TestCase):
             "Vault KDF parameters must be an object.",
             error_output.getvalue(),
         )
+
+    def test_missing_kdf_fields_are_rejected(self):
+        required_fields = (
+            "salt_b64",
+            "time_cost",
+            "memory_cost",
+            "parallelism",
+            "hash_len",
+        )
+
+        for field in required_fields:
+            with self.subTest(missing_field=field):
+                incomplete_kdf = self.vault["kdf"].copy()
+                del incomplete_kdf[field]
+                error_output = StringIO()
+
+                with redirect_stderr(error_output):
+                    with self.assertRaises(SystemExit) as result:
+                        derive_key(
+                            {"kdf": incomplete_kdf},
+                            self.password
+                        )
+
+                self.assertEqual(result.exception.code, 1)
+                self.assertIn(
+                    f"Vault KDF parameters are missing field: {field}.",
+                    error_output.getvalue(),
+                )
