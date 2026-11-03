@@ -63,38 +63,81 @@ to be magic.
 
 ## The four building blocks — and *why*
 
-### 1. Master password stored with Argon2id — not SHA-256, not AES
+### 1. Master password verification with Argon2id
 
-The master password is hashed with **Argon2id** (`argon2-cffi`) and stored as a
-`$argon2id$...` string. A wrong password is rejected on unlock.
+We use `argon2-cffi.PasswordHasher` to hash the master password during `init`.
+The stored `master_hash` is an `$argon2id$...` string containing the algorithm,
+version, cost parameters, salt, and hash. `verify_master()` calls `PH.verify()`
+with this string and the entered password. A mismatch is rejected with an error
+and exit code 1; the original password is not recovered from the hash.
 
-Why Argon2id and not SHA-256? Because they solve different problems. SHA-256 is
-a *fast* general-purpose hash: that is exactly the wrong property for hashing
-human-chosen passwords. A fast hash means an attacker with the file can try
-billions of guesses per second on a GPU. Argon2id is **memory-hard**: each guess
-must allocate tens of megabytes of RAM, so guessing cannot be parallelised
-across GPU cores or ASICs. It is also salted (two identical passwords produce
-different hashes, and precomputed rainbow tables are useless) and has tunable
-cost parameters that we set to 64 MiB / t=3 / p=4.
+Argon2id is designed for password hashing: its computation and memory costs make
+each offline guess more expensive than a fast general-purpose hash such as
+SHA-256. It does not prevent parallel attacks or make weak passwords safe.
+AES is reversible encryption, so it does not serve the same purpose as a
+password-verification hash.
 
-Why not AES? AES is not a hash at all — it is a *reversible* cipher, and we must
-*never* be able to recover the master password from what is stored. Argon2id is
-one-way.
+`PasswordHasher.hash()` generates its own random salt. Repeating the same
+password therefore normally produces different encoded hashes. Verification
+uses the salt and parameters embedded in the stored hash, rather than comparing
+two newly generated hash strings.
 
-### 2. Encryption key derived from the master password — no key file
+The configured profile is `time_cost=3`, `memory_cost=65536` KiB (64 MiB),
+`parallelism=4`, and `hash_len=32` bytes. These are this project's chosen settings,
+not a claim that Argon2id only supports these values or that they are optimal for
+every machine. Higher costs also increase legitimate unlock time; this project
+does not include a hardware benchmark.
 
-The AES-256 key that encrypts the vault is derived from the master password with
-Argon2id used as a **key-derivation function (KDF)**. It is computed on demand
-and never written to disk. There is no key file anywhere.
+### 2. Encryption key derived from the master password
 
-Why derive instead of generating a random key and saving it next to the vault?
-Because a saved key file is *itself a secret stored on disk*. If the attacker
-steals the vault file, they steal the key file too, and the vault opens — the
-master password becomes irrelevant. Deriving the key from the password means
-the **only secret is in the user's head**: stealing the disk gives the attacker
-nothing but ciphertext they cannot open without guessing the password. The
-trade-off is that the password must be strong, which is why we hash it with
-Argon2id and encourage length.
+`derive_key()` uses `argon2.low_level.hash_secret_raw(..., type=Type.ID)` to derive
+a 32-byte (256-bit) AES key from the UTF-8 encoded master password, a salt, and
+the stored cost parameters. This raw key is different from the encoded
+`master_hash`: the hash verifies the password, while the raw key encrypts and
+decrypts entries. `derive_key()` alone does not verify that a password is correct;
+`load_and_unlock()` calls `verify_master()` first.
+
+At initialization, `os.urandom(16)` creates a separate KDF salt. It is stored as
+`kdf.salt_b64`, independently of the verification salt inside `master_hash`.
+A salt is public; Base64 only makes its bytes suitable for JSON and does not
+encrypt them. The same password, salt, and parameters reproduce the same key on
+each unlock. Changing the password or salt changes the derived key in our tests.
+The derived key is used in memory and is not written to a key file.
+
+If an unencrypted key were saved beside the vault, an attacker who copied both
+files could decrypt the entries without guessing the master password. Derivation
+avoids that extra secret file. It still depends on a strong master password and
+does not protect secrets from malware reading the running process.
+
+#### Accepted KDF format
+
+Before invoking Argon2id, `derive_key()` requires a `kdf` object containing all
+five fields below:
+
+| Field | Accepted value |
+|---|---|
+| `salt_b64` | A string accepted by strict Base64 decoding, yielding exactly 16 bytes |
+| `time_cost` | Integer `3` |
+| `memory_cost` | Integer `65536` (KiB) |
+| `parallelism` | Integer `4` |
+| `hash_len` | Integer `32` (bytes, for AES-256) |
+
+The numeric fields must be Python integers after JSON loading; booleans,
+strings, floats, and null are rejected. Missing fields, invalid salt encoding or
+length, and unsupported numeric values produce a specific error and exit code 1.
+Strict decoding uses `validate=True`, so invalid characters are not silently
+ignored. Validation rejects unsupported resource settings before the KDF runs.
+
+This fixed profile matches vaults generated by the current `init` command.
+Other Argon2 configurations, even if valid for the library, are not supported by
+this reader. Future changes need an explicit compatibility or migration plan;
+existing vault parameters must not be silently rewritten, since doing so changes
+the derived key.
+
+These checks apply to the `kdf` object. They do not authenticate all JSON
+metadata or bound the work requested by the separate `master_hash` string, which
+`PH.verify()` processes before `derive_key()`. They are not complete validation
+of every possible vault-file input.
 
 ### 3. Vault encrypted with AES-256-GCM — authenticated encryption
 
@@ -148,9 +191,34 @@ Generating secrets is exactly the use case `secrets` exists for.
 - `master_hash` is used only to *verify* the password on unlock.
 - `cipher.data_b64` is `ciphertext ‖ 16-byte tag`; `nonce_b64` is fresh per write.
 
-The master password is derived twice per unlock (once for verification, once
-for the key) — a deliberate, slightly slower choice that keeps verification and
-key derivation as two clean, independent primitives.
+Each unlock performs two Argon2id computations: one verifies `master_hash`
+using its embedded salt and parameters; the other derives the AES key using the
+separate KDF salt and supported parameters. This separates the two purposes but
+adds to unlock cost.
+
+---
+
+## Master-password and key-derivation tests
+
+From the repository root, run:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+`tests/test_master_password.py` checks acceptance of a correct password and
+rejection of a wrong password with exit code 1. `tests/test_key_derivation.py`
+checks reproducible derivation, changes after changing the password or salt,
+32-byte output, and rejection of malformed or unsupported KDF inputs. Error
+handling tests check both the exit code and the explanatory message.
+
+The current suite has 14 test methods, with additional cases run as subtests.
+Fixtures use a fixed salt and a fictional password so that inputs are controlled;
+real vault initialization still uses random salts. These unit tests do not read
+or write a real vault file, test the complete CLI, or establish correctness of
+AES-GCM, RSA sharing, or the breach-check service. The wrong-password test may
+print `error: Wrong master password.` while still passing because the exit is
+expected and caught.
 
 ---
 
