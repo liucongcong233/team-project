@@ -156,6 +156,7 @@ def derive_key(vault: dict, password: str) -> bytes:
         "time_cost": ARGON2_TIME_COST,
         "memory_cost": ARGON2_MEMORY_COST,
         "parallelism": ARGON2_PARALLELISM,
+        "hash_len": ARGON2_HASH_LEN,
     }
 
     for field, expected in supported_parameters.items():

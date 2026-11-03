@@ -183,8 +183,13 @@ class TestKeyDerivation(unittest.TestCase):
                     error_output.getvalue(),
                 )
 
-    def test_non_integer_cost_parameters_are_rejected(self):
-        fields = ("time_cost", "memory_cost", "parallelism")
+    def test_non_integer_kdf_parameters_are_rejected(self):
+        fields = (
+            "time_cost",
+            "memory_cost",
+            "parallelism",
+            "hash_len",
+        )
 
         for field in fields:
             for invalid_value in (None, "3", 3.0, True):
@@ -206,15 +211,16 @@ class TestKeyDerivation(unittest.TestCase):
                         error_output.getvalue(),
                     )
 
-    def test_unsupported_cost_parameters_are_rejected(self):
+    def test_unsupported_kdf_parameters_are_rejected(self):
         supported_parameters = {
             "time_cost": 3,
             "memory_cost": 65536,
             "parallelism": 4,
+            "hash_len": 32,
         }
 
         for field, expected in supported_parameters.items():
-            for invalid_value in (-1, 0, expected + 1, 10**12):
+            for invalid_value in (-1, 0, 16, 24, expected + 1, 10 ** 12):
                 with self.subTest(field=field, value=invalid_value):
                     invalid_kdf = self.vault["kdf"].copy()
                     invalid_kdf[field] = invalid_value
