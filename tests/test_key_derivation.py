@@ -159,3 +159,26 @@ class TestKeyDerivation(unittest.TestCase):
                     "Vault KDF salt is not valid Base64.",
                     error_output.getvalue(),
                 )
+
+    def test_invalid_salt_lengths_are_rejected(self):
+        for length in (0, 15, 17):
+            with self.subTest(salt_lenght=length):
+                invalid_salt = b"a" * length
+                invalid_kdf = self.vault["kdf"].copy()
+                invalid_kdf["salt_b64"] = (
+                    base64.b64encode(invalid_salt).decode("ascii")
+                )
+                error_output = StringIO()
+
+                with redirect_stderr(error_output):
+                    with self.assertRaises(SystemExit) as result:
+                        derive_key(
+                            {"kdf": invalid_kdf},
+                            self.password,
+                        )
+
+                self.assertEqual(result.exception.code, 1)
+                self.assertIn(
+                    "Vault KDF salt must be 16 bytes.",
+                    error_output.getvalue(),
+                )

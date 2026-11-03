@@ -149,6 +149,9 @@ def derive_key(vault: dict, password: str) -> bytes:
     except (binascii.Error, ValueError):
         die("Vault KDF salt is not valid Base64.")
 
+    if len(salt) != KDF_SALT_LEN:
+        die(f"Vault KDF salt must be {KDF_SALT_LEN} bytes.")
+
     return hash_secret_raw(
         secret=password.encode("utf-8"),
         salt=salt,
