@@ -182,3 +182,53 @@ class TestKeyDerivation(unittest.TestCase):
                     "Vault KDF salt must be 16 bytes.",
                     error_output.getvalue(),
                 )
+
+    def test_non_integer_cost_parameters_are_rejected(self):
+        fields = ("time_cost", "memory_cost", "parallelism")
+
+        for field in fields:
+            for invalid_value in (None, "3", 3.0, True):
+                with self.subTest(field=field, value=invalid_value):
+                    invalid_kdf = self.vault["kdf"].copy()
+                    invalid_kdf[field] = invalid_value
+                    error_output = StringIO()
+
+                    with redirect_stderr(error_output):
+                        with self.assertRaises(SystemExit) as result:
+                            derive_key(
+                                {"kdf": invalid_kdf},
+                                self.password,
+                            )
+
+                    self.assertEqual(result.exception.code, 1)
+                    self.assertIn(
+                        f"Vault KDF {field} must be an integer.",
+                        error_output.getvalue(),
+                    )
+
+    def test_unsupported_cost_parameters_are_rejected(self):
+        supported_parameters = {
+            "time_cost": 3,
+            "memory_cost": 65536,
+            "parallelism": 4,
+        }
+
+        for field, expected in supported_parameters.items():
+            for invalid_value in (-1, 0, expected + 1, 10**12):
+                with self.subTest(field=field, value=invalid_value):
+                    invalid_kdf = self.vault["kdf"].copy()
+                    invalid_kdf[field] = invalid_value
+                    error_output = StringIO()
+
+                    with redirect_stderr(error_output):
+                        with self.assertRaises(SystemExit) as result:
+                            derive_key(
+                                {"kdf": invalid_kdf},
+                                self.password,
+                            )
+
+                    self.assertEqual(result.exception.code, 1)
+                    self.assertIn(
+                        f"Vault KDF {field} must be {expected}.",
+                        error_output.getvalue(),
+                    )

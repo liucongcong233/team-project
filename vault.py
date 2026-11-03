@@ -152,6 +152,21 @@ def derive_key(vault: dict, password: str) -> bytes:
     if len(salt) != KDF_SALT_LEN:
         die(f"Vault KDF salt must be {KDF_SALT_LEN} bytes.")
 
+    supported_parameters = {
+        "time_cost": ARGON2_TIME_COST,
+        "memory_cost": ARGON2_MEMORY_COST,
+        "parallelism": ARGON2_PARALLELISM,
+    }
+
+    for field, expected in supported_parameters.items():
+        value = kdf[field]
+
+        if type(value) is not int:
+            die(f"Vault KDF {field} must be an integer.")
+
+        if value != expected:
+            die(f"Vault KDF {field} must be {expected}.")
+
     return hash_secret_raw(
         secret=password.encode("utf-8"),
         salt=salt,
