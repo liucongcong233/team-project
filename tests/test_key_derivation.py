@@ -112,3 +112,50 @@ class TestKeyDerivation(unittest.TestCase):
                     f"Vault KDF parameters are missing field: {field}.",
                     error_output.getvalue(),
                 )
+
+    def test_non_string_salt_is_rejected(self):
+        for invalid_salt in (None, 123, [], True):
+            with self.subTest(salt=invalid_salt):
+                invalid_kdf = self.vault["kdf"].copy()
+                invalid_kdf["salt_b64"] = invalid_salt
+                error_output = StringIO()
+
+                with redirect_stderr(error_output):
+                    with self.assertRaises(SystemExit) as result:
+                        derive_key(
+                            {"kdf": invalid_kdf},
+                            self.password,
+                        )
+
+                self.assertEqual(result.exception.code, 1)
+                self.assertIn(
+                    "Vault KDF salt must be a Base64 string.",
+                    error_output.getvalue(),
+                )
+
+    def test_invalid_base64_salt_is_rejected(self):
+        invalid_values = (
+            "!!!!",
+            "abc",
+            "盐",
+            self.vault["kdf"]["salt_b64"] + "!",
+        )
+
+        for invalid_salt in invalid_values:
+            with self.subTest(salt=invalid_salt):
+                invalid_kdf = self.vault["kdf"].copy()
+                invalid_kdf["salt_b64"] = invalid_salt
+                error_output = StringIO()
+
+                with redirect_stderr(error_output):
+                    with self.assertRaises(SystemExit) as result:
+                        derive_key(
+                            {"kdf": invalid_kdf},
+                            self.password,
+                        )
+
+                self.assertEqual(result.exception.code, 1)
+                self.assertIn(
+                    "Vault KDF salt is not valid Base64.",
+                    error_output.getvalue(),
+                )

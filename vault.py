@@ -35,6 +35,7 @@ import urllib.error
 import urllib.request
 from getpass import getpass
 from pathlib import Path
+import binascii
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -139,7 +140,15 @@ def derive_key(vault: dict, password: str) -> bytes:
         if field not in kdf:
             die(f"Vault KDF parameters are missing field: {field}.")
 
-    salt = base64.b64decode(kdf["salt_b64"])
+    salt_b64 = kdf["salt_b64"]
+    if not isinstance(salt_b64, str):
+        die("Vault KDF salt must be a Base64 string.")
+
+    try:
+        salt = base64.b64decode(salt_b64, validate=True)
+    except (binascii.Error, ValueError):
+        die("Vault KDF salt is not valid Base64.")
+
     return hash_secret_raw(
         secret=password.encode("utf-8"),
         salt=salt,
